@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weather Notepad</title>
+
+<style>
+/* ===== Global Background ===== */
+body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    background: linear-gradient(120deg, #89f7fe, #66a6ff, #b993d6);
+    background-size: 400% 400%;
+    animation: gradientMove 12s ease infinite;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+@keyframes gradientMove {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* Floating Orbs */
+.orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(60px);
+    opacity: 0.6;
+    animation: float 10s infinite alternate ease-in-out;
+}
+.orb.one { width: 260px; height: 260px; background: #ffffff; top: 10%; left: 15%; }
+.orb.two { width: 300px; height: 300px; background: #ffd6ff; bottom: 15%; right: 10%; }
+
+@keyframes float {
+    from { transform: translateY(0px); }
+    to { transform: translateY(-40px); }
+}
+
+/* ===== App Card ===== */
+.app {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 420px;
+    background: rgba(255, 255, 255, 0.22);
+    backdrop-filter: blur(18px);
+    border-radius: 20px;
+    padding: 22px;
+    box-shadow: 0 25px 45px rgba(0,0,0,0.2);
+    color: #111;
+}
+
+h1 {
+    text-align: center;
+    margin-bottom: 15px;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+/* Inputs */
+input, textarea, button {
+    width: 100%;
+    padding: 12px;
+    border-radius: 12px;
+    border: none;
+    font-size: 15px;
+    margin-bottom: 12px;
+    outline: none;
+}
+
+input {
+    background: rgba(255,255,255,0.85);
+}
+
+button {
+    background: linear-gradient(135deg, #2563eb, #1e40af);
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+button:hover {
+    opacity: 0.95;
+}
+
+/* Status */
+.status {
+    text-align: center;
+    font-size: 14px;
+    min-height: 18px;
+    margin-bottom: 10px;
+}
+
+/* Weather Box */
+.weather-box {
+    background: rgba(255,255,255,0.85);
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 10px;
+    display: none;
+}
+
+.weather-box p {
+    margin: 6px 0;
+    font-size: 15px;
+}
+
+/* Notes */
+textarea {
+    height: 130px;
+    resize: none;
+    background: rgba(255,255,255,0.9);
+}
+
+/* Footer */
+footer {
+    text-align: center;
+    font-size: 12px;
+    margin-top: 8px;
+    color: #1f2937;
+}
+</style>
+</head>
+
+<body>
+
+<div class="orb one"></div>
+<div class="orb two"></div>
+
+<div class="app">
+    <h1>🌤 Weather Notepad</h1>
+
+    <input id="cityInput" placeholder="Enter city name (e.g. Mumbai)">
+    <button onclick="fetchWeather()">Get Weather</button>
+
+    <div class="status" id="status"></div>
+
+    <div class="weather-box" id="weatherBox">
+        <p><strong>Location:</strong> <span id="location"></span></p>
+        <p><strong>Temperature:</strong> <span id="temp"></span> °C</p>
+        <p><strong>Feels Like:</strong> <span id="feels"></span> °C</p>
+        <p><strong>Condition:</strong> <span id="condition"></span></p>
+        <p><strong>Wind:</strong> <span id="wind"></span> km/h</p>
+        <p><strong>Humidity:</strong> <span id="humidity"></span>%</p>
+    </div>
+
+    <textarea id="notes" placeholder="Write your weather notes here..."></textarea>
+
+    <footer>Live data by Open-Meteo • Notes auto-saved</footer>
+</div>
+
+<script>
+const notes = document.getElementById("notes");
+notes.value = localStorage.getItem("weatherNotes") || "";
+notes.addEventListener("input", () =>
+    localStorage.setItem("weatherNotes", notes.value)
+);
+
+const weatherCodes = {
+    0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",
+    45:"Fog",51:"Drizzle",61:"Rain",71:"Snow",80:"Showers",95:"Thunderstorm"
+};
+
+async function fetchWeather() {
+    const city = cityInput.value.trim();
+    const status = document.getElementById("status");
+    const box = document.getElementById("weatherBox");
+
+    if (!city) {
+        status.textContent = "Please enter a city name.";
+        return;
+    }
+
+    status.textContent = "Fetching live weather…";
+    box.style.display = "none";
+
+    try {
+        const geo = await fetch(
+            `https://geocoding-api.open-meteo.com/v1/search?name=${city}&count=1`
+        ).then(r => r.json());
+
+        if (!geo.results) {
+            status.textContent = "City not found.";
+            return;
+        }
+
+        const { latitude, longitude, name, country } = geo.results[0];
+
+        const weather = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code`
+        ).then(r => r.json());
+
+        const c = weather.current;
+
+        location.textContent = `${name}, ${country}`;
+        temp.textContent = c.temperature_2m;
+        feels.textContent = c.apparent_temperature;
+        wind.textContent = c.wind_speed_10m;
+        humidity.textContent = c.relative_humidity_2m;
+        condition.textContent = weatherCodes[c.weather_code] || "Unknown";
+
+        box.style.display = "block";
+        status.textContent = "Weather updated successfully.";
+
+    } catch {
+        status.textContent = "Unable to fetch weather data.";
+    }
+}
+</script>
+
+</body>
+</html>
+
